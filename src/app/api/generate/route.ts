@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Lazy initialization - only create client when needed
+let groq: Groq | null = null;
+
+function getGroqClient() {
+  if (!groq) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      throw new Error('GROQ_API_KEY environment variable is not set');
+    }
+    groq = new Groq({ apiKey });
+  }
+  return groq;
+}
 
 export async function POST(request: Request) {
   try {
@@ -32,7 +42,7 @@ Example: [{"query": "#TikTokMadeMeBuyIt mini blender 2025", "platform": "TikTok"
 
 Make each query unique and specific. Avoid generic terms.`;
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroqClient().chat.completions.create({
       messages: [
         {
           role: 'system',
