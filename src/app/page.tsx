@@ -32,6 +32,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [isFallback, setIsFallback] = useState(false);
 
   const generateQueries = async () => {
     if (!seed.trim()) {
@@ -55,6 +56,7 @@ export default function Home() {
       
       const data = await response.json();
       setQueries(data.queries || []);
+      setIsFallback(data.fallback || false);
       
       if (data.queries?.length === 0) {
         setError('No queries generated. Try a different product idea.');
@@ -235,9 +237,16 @@ export default function Home() {
                 <h3 className="text-xl font-semibold text-white">
                   Generated Search Queries
                 </h3>
-                <span className="px-3 py-1 bg-slate-800 rounded-full text-sm text-slate-400">
-                  {queries.length} results
-                </span>
+                <div className="flex items-center gap-2">
+                  {isFallback && (
+                    <span className="px-3 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-full">
+                      ⚡ Quick Mode
+                    </span>
+                  )}
+                  <span className="px-3 py-1 bg-slate-800 rounded-full text-sm text-slate-400">
+                    {queries.length} results
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-3">

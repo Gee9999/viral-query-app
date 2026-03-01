@@ -1,19 +1,23 @@
 import { NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 
-// Lazy initialization - only create client when needed
-let groq: Groq | null = null;
-
-function getGroqClient() {
-  if (!groq) {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new Error('GROQ_API_KEY environment variable is not set');
-    }
-    groq = new Groq({ apiKey });
-  }
-  return groq;
-}
+// Fallback queries if API fails
+const getFallbackQueries = (seed: string, category: string, platform: string) => {
+  const platforms = platform === 'all' ? ['TikTok', 'Amazon', 'Google'] : [platform];
+  
+  return [
+    { query: `#TikTokMadeMeBuyIt ${seed} 2025`, platform: 'TikTok' },
+    { query: `viral ${seed} trending now`, platform: 'TikTok' },
+    { query: `${seed} amazon finds under $30`, platform: 'Amazon' },
+    { query: `best ${seed} 2025 reviews`, platform: 'Amazon' },
+    { query: `cheap ${seed} that actually works`, platform: 'Google' },
+    { query: `${seed} vs expensive alternative`, platform: 'Google' },
+    { query: `${seed} must have ${category}`, platform: 'TikTok' },
+    { query: `where to buy ${seed} cheap`, platform: 'Google' },
+    { query: `${seed} unboxing review`, platform: 'TikTok' },
+    { query: `${seed} worth it or hype`, platform: 'Amazon' },
+  ];
+};
 
 export async function POST(request: Request) {
   try {
@@ -25,6 +29,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Check if API key exists
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      console.warn('GROQ_API_KEY not set, using fallback queries');
+      return NextResponse.json({ 
+        queries: getFallbackQueries(seed, category || 'products', platform || 'all'),
+        fallback: true 
+      });
+    }
+
+    const groq = new Groq({ apiKey });
 
     const prompt = `Generate 10 optimized search queries to find viral ${category || 'products'} related to "${seed}".
 
@@ -42,7 +58,7 @@ Example: [{"query": "#TikTokMadeMeBuyIt mini blender 2025", "platform": "TikTok"
 
 Make each query unique and specific. Avoid generic terms.`;
 
-    const completion = await getGroqClient().chat.completions.create({
+    const completion = await groq.chat.completions.create({
       messages: [
         {
           role: 'system',
@@ -62,14 +78,26 @@ Make each query unique and specific. Avoid generic terms.`;
     
     // Extract JSON from response
     const jsonMatch = content.match(/\[[\s\S]*\]/);
-    const queries = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    let queries = [];
+    
+    if (jsonMatch) {
+      try {
+        queries = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('Failed to parse JSON:', e);
+        queries = getFallbackQueries(seed, category || 'products', platform || 'all');
+      }
+    } else {
+      queries = getFallbackQueries(seed, category || 'products', platform || 'all');
+    }
 
     return NextResponse.json({ queries });
   } catch (error) {
     console.error('Error generating queries:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate queries' },
-      { status: 500 }
-    );
+    // Return fallback instead of error
+    return NextResponse.json({ 
+      queries: getFallbackQueries(seed, 'products', 'all'),
+      fallback: true 
+    });
   }
 }
